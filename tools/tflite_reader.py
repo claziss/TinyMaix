@@ -66,7 +66,7 @@ def CreateDictFromFlatbuffer(buffer_data):
     return FlatbufferToDict(model, preserve_as_numpy=False)
 
 
-def read_tflite(tflite_name):
+def read_tflite(tflite_name, log_func=print):
     layers = []
     # Read the model.
     with open(tflite_name, 'rb') as f:
@@ -76,8 +76,8 @@ def read_tflite(tflite_name):
     interpreter.allocate_tensors()
 
     data = CreateDictFromFlatbuffer(model_buffer)
-    op_codes = data['operator_codes']  
-    subg = data['subgraphs'][0]      
+    op_codes = data['operator_codes']
+    subg = data['subgraphs'][0]
     tensors = subg['tensors']          #weight, bias here
     input_idxs = subg['inputs']
     output_idxs = subg['outputs']
@@ -87,7 +87,7 @@ def read_tflite(tflite_name):
         tmp = tensors[i]["name"]
         tmp = bytearray(tmp)
         tensors[i]["name"] = tmp.decode('utf-8')
-    
+
     # export layer param
     last_pad = None
     for idx in range(len(subg['operators'])):
@@ -98,28 +98,27 @@ def read_tflite(tflite_name):
         op_code = op_codes[op_idx]['builtin_code']
         layer_name = BuiltinCodeToName(op_code) 
         l["name"]=layer_name
-        print(layer_name)
-    
+        log_func(layer_name)
+
         #layer param
         layer_param = layer['builtin_options']
-        print(layer_param)
+        log_func(layer_param)
         if layer_param is not None:
             l.update(layer_param)
-        
+
         #layer input/output idx
         input_tensor_idx = layer['inputs']
         output_tensor_idx = layer['outputs']
-        
+
         if len(output_tensor_idx)>1:
-            print("Not support multi output yet")
-            return None
-        
+            raise Exception("Not support multi output yet")
+
         if output_tensor_idx[0] in output_idxs:
             l.update({"is_output":1})
-            print("OUTPUT!")
+            log_func("OUTPUT!")
         else:
             l.update({"is_output":0})
-            
+
         #input
         input_idx = input_tensor_idx[0]
         if last_pad == None:
@@ -130,7 +129,7 @@ def read_tflite(tflite_name):
             shape[2] = shape[2] - last_pad[2] - last_pad[3]
             l.update({"in_shape":shape})
         l.update({"in_name":tensors[input_idx]["name"]})
-        print("    input: %s"%(tensors[input_idx]["name"]))
+        log_func("    input: %s"%(tensors[input_idx]["name"]))
         if tensors[input_idx]["quantization"]['scale'] is not None:
             l.update({"i_scale":tensors[input_idx]['quantization' ]['scale'][0]})
             l.update({"i_zeropoint":tensors[input_idx]['quantization' ]['zero_point'][0]})
@@ -149,13 +148,13 @@ def read_tflite(tflite_name):
         else:
             l.update({"o_scale":1})
             l.update({"o_zeropoint":0})
-        
+
         if layer_name == "CONV_2D" or layer_name == "DEPTHWISE_CONV_2D":
             #filter weight
             weight_idx = input_tensor_idx[1]
             weight = interpreter.get_tensor(weight_idx) #用interpreter获取具体的权重数值
             filters = tensors[weight_idx]['shape'] #卷积核尺寸
-            print("    filter %d: %s "%(weight_idx, tensors[weight_idx]["name"]))
+            log_func("    filter %d: %s "%(weight_idx, tensors[weight_idx]["name"]))
             #print(weight.shape, filters)
             #print(tensors[weight_idx])
             l.update({"weight":weight})
@@ -168,7 +167,7 @@ def read_tflite(tflite_name):
             #filter bias
             bias_idx = input_tensor_idx[2]
             bias = interpreter.get_tensor(bias_idx)
-            print("    bias %d: %s"%(bias_idx,tensors[bias_idx]["name"]))
+            log_func("    bias %d: %s"%(bias_idx,tensors[bias_idx]["name"]))
             l.update({"bias":bias})
             if tensors[bias_idx]["quantization"]['scale'] is not None:
                 l.update({"b_scale":np.array(tensors[bias_idx]['quantization' ]['scale'])})
@@ -182,12 +181,12 @@ def read_tflite(tflite_name):
                 l.update({"pad":last_pad})
         elif layer_name == "MEAN":
             data_idx = input_tensor_idx[1]
-            print("    data: %s"%(tensors[data_idx]["name"]))
+            log_func("    data: %s"%(tensors[data_idx]["name"]))
             reduce_idx = interpreter.get_tensor(data_idx)
             l.update({"reduce_idx":reduce_idx-1})
         elif layer_name == "FULLY_CONNECTED":
             weight_idx = input_tensor_idx[1]
-            print("    weight: %s"%(tensors[weight_idx]["name"]))
+            log_func("    weight: %s"%(tensors[weight_idx]["name"]))
             weight = interpreter.get_tensor(weight_idx)
             l.update({"weight":weight})
             if tensors[weight_idx]["quantization"]['scale'] is not None:
@@ -198,7 +197,7 @@ def read_tflite(tflite_name):
                 l.update({"w_zeropoint":0})
             bias_idx = input_tensor_idx[2]
             if bias_idx >= 0:
-                print("    bias: %s"%(tensors[bias_idx]["name"]))
+                log_func("    bias: %s"%(tensors[bias_idx]["name"]))
                 bias = interpreter.get_tensor(bias_idx)
                 l.update({"bias":bias})
                 if tensors[bias_idx]["quantization"]['scale'] is not None:
@@ -208,11 +207,11 @@ def read_tflite(tflite_name):
                     l.update({"b_scale":1})
                     l.update({"b_zeropoint":0})
         elif layer_name == "SOFTMAX":
-            print("    softmax no param")
+            log_func("    softmax no param")
         elif layer_name == "RESHAPE":
-            print("    reshape no param")
+            log_func("    reshape no param")
         elif layer_name == "PAD":
-            print("    Dirty deal with PAD")
+            log_func("    Dirty deal with PAD")
             layer_next = subg['operators'][idx+1]
             op_idx = layer_next['opcode_index']
             op_code = op_codes[op_idx]['builtin_code']
@@ -222,25 +221,24 @@ def read_tflite(tflite_name):
                     #print(layer_next)
                     #print(len(input_tensor_idx))
                     pad_idx = input_tensor_idx[1]
-                    print("    pad: %s"%(tensors[pad_idx]["name"]))
+                    log_func("    pad: %s"%(tensors[pad_idx]["name"]))
                     pad = interpreter.get_tensor(pad_idx)
                     #print(pad)
                     assert pad[0,0]==0 and pad[0,1]==0 and pad[3,0]==0 and pad[3,1]==0
-                    #l.update({"pad":[pad[1][0], pad[1][1], pad[2][0], pad[2][1]]})   
+                    #l.update({"pad":[pad[1][0], pad[1][1], pad[2][0], pad[2][1]]})
                     last_pad = [pad[1][0], pad[1][1], pad[2][0], pad[2][1]]
                     continue
                 else:
-                    print("only deal with pad+conv_valid")
-                    assert 0             
+                    raise Exception("only deal with pad+conv_valid")
             else:
-                print("only deal with pad+conv/dwconv")
-                assert 0 
-        elif layer_name == "SHAPE" or layer_name == "STRIDED_SLICE" or layer_name == "PACK":
-            print("    ignore %s"%layer_name)
+                raise Exception("only deal with pad+conv/dwconv")
+        elif layer_name in ["SHAPE", "STRIDED_SLICE", "PACK"]:
+            log_func("    ignore %s" % layer_name)
             continue
+        elif layer_name == "QUANTIZE":
+            raise Exception("QUANTIZE not supported, maybe tflite is not quantized model, check your tflite model")
         else:
-            print("Not support layer %s"%layer_name)
-            assert 0
+            raise Exception("Not support layer %s"%layer_name)
         layers.append(l)
         last_pad = None
     return layers

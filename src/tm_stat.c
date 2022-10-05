@@ -13,6 +13,15 @@ limitations under the License.
 #include "tinymaix.h"
 
 #if TM_ENABLE_STAT
+static const char* mdl_type_str[6] = {
+    "int8",   
+    "int16",     
+    "fp32",    
+    "fp16",  
+    "fp8 1.4.3", 
+    "fp8 1.5.2", 
+};
+
 static const char* tml_str_tbl[TML_MAXCNT] = {
     "Conv2D",   /*TML_CONV2D  = 0,*/
     "GAP",      /*TML_GAP     = 1,*/
@@ -34,7 +43,7 @@ static const int tml_headsize_tbl[TML_MAXCNT] = {
 tm_err_t tm_stat(tm_mdlbin_t* b)
 {   
     printf("================================ model stat ================================\n");
-    printf("mdl_type=%d (0 int8, 1 int16, 2 fp32)\n", b->mdl_type);
+    printf("mdl_type=%d (%s))\n", b->mdl_type, mdl_type_str[b->mdl_type]);
     printf("out_deq=%d \n", b->out_deq);
     printf("input_cnt=%d, output_cnt=%d, layer_cnt=%d\n", b->input_cnt, b->output_cnt, b->layer_cnt);
     uint16_t* idim = b->in_dims;
@@ -48,7 +57,7 @@ tm_err_t tm_stat(tm_mdlbin_t* b)
     printf("//Note: PARAM is layer param size, include align padding\r\n\r\n");
     printf("Idx\tLayer\t         outshape\tinoft\toutoft\tPARAM\tMEMOUT OPS\n");
     printf("---\tInput    \t%3d,%3d,%3d\t-   \t0    \t0 \t%ld \t0\n",\
-        idim[1],idim[2],idim[3], idim[1]*idim[2]*idim[3]*sizeof(mtype_t));
+        idim[1],idim[2],idim[3], (long int)(idim[1]*idim[2]*idim[3]*sizeof(mtype_t)));
     //      000  Input    -     224,224,3  0x40001234 0x40004000 100000 500000 200000
     //printf("000  Input    -     %3d,%3d,%d  0x%08x   0x%08x     %6d %6d %6d\n",) 
     int sum_param = 0;
@@ -57,7 +66,7 @@ tm_err_t tm_stat(tm_mdlbin_t* b)
     int layer_i;
     for(layer_i = 0; layer_i < b->layer_cnt; layer_i++){
         tml_head_t* h = (tml_head_t*)(layer_body);
-        TM_DBG("body oft = %d\n", (uint32_t)h - (uint32_t)(b));
+        TM_DBG("body oft = %d\n", (uint32_t)((size_t)h - (size_t)(b)));
         TM_DBG("type=%d, is_out=%d, size=%d, in_oft=%d, out_oft=%d, in_dims=[%d,%d,%d,%d], out_dims=[%d,%d,%d,%d], in_s=%.3f, in_zp=%d, out_s=%.3f, out_zp=%d\n",\
                 h->type,h->is_out,h->size,h->in_oft,h->out_oft,\
                 h->in_dims[0],h->in_dims[1],h->in_dims[2],h->in_dims[3],\
@@ -104,7 +113,7 @@ tm_err_t tm_stat(tm_mdlbin_t* b)
             printf("%03d\t%s      \t%3d,%3d,%3d\t%d\t%d\t%d\t%ld\t", layer_i, tml_str_tbl[h->type], \
                 h->out_dims[1], h->out_dims[2], h->out_dims[3], \
                 h->in_oft, h->out_oft, h->size - tml_headsize_tbl[h->type], \
-                memout*sizeof(mtype_t));
+                (long int)(memout*sizeof(mtype_t)));
             printf("%d\r\n", ops);
         } else {
             return TM_ERR_LAYERTYPE;

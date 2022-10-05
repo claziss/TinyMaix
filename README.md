@@ -1,15 +1,22 @@
 # TinyMaix
 
-TinyMaix is a tiny inference Neural Network library specifically for microcontrollers (TinyML).
+[中文](README_ZH.md) | English
+
+TinyMaix is a tiny inference Neural Network library specifically for microcontrollers (TinyML).   
+We design it follow the rule:  **Easy-to-Use** > **Portable** > **Speed** > **Space**  
+
+Introduction to tinyML: [**TinyML**](tinyml_intro.md)  
+See tested **30** chips and benchmark:  [**benchmark**](benchmark.md)  
+Good News:  [**Rewarded Porting TinyMaix**](reward.md)
 
 **Highlights**
-- Core Code less than **400 lines**(tm_layers.c+tm_model.c+arch_O0.h), code .text section less than **3KB**   
+- Core Code less than **400 lines**(tm_layers.c+tm_model.c+arch_cpu.h), code .text section less than **3KB**   
 - Low ram consume, even **Arduino ATmega328** (32KB Flash, 2KB Ram) can run mnist with TinyMaix~  
-- Support **INT8/FP32** model, convert from keras h5 or tflite.
+- Support **INT8/FP32/FP16** model, experimentally support **FP8**, convert from keras h5 or tflite.
 - Supoort multi architecture accelerate:  **ARM SIMD/NEON/MVEI，RV32P, RV64V** ~
 - User-friendly interfaces, just load/run models~
 - Support Full Static Memory config
-- [MaixHub](https://maixhub.com) **Online Model Training** support soon~ 
+- [MaixHub](https://maixhub.com) **Online Model Training** support
 
 **Run mnist demo on Arduino ATmega328**
 ```
@@ -56,6 +63,16 @@ mnist demo
 ### Predict output is: Number 2, prob=89
 ```
 
+## TODO List
+1. ~~optimize tm_layers.c to tm_layers_O1.c, aimed to speed up to 1.4~2.0X~~  Done
+2. Train good backbone for 64KB/128KB/256KB/512KB ram litmit
+3. Add example: Detector,KWS,HAR,Gesture,OCR,...
+4. ...
+
+Do you want take participate in development of TinyMaix, or discuss with TinyML hobbyist?  
+**Join our telegram group:** https://t.me/tinymaix
+
+
 ## TinyMaix Design
 TinyMaix is design for running AI Neural Network Mdoels on resources limited MCUs, which usually called **TinyML**  
 
@@ -63,9 +80,9 @@ There are many TinyML infer library now, like TFLite micro, microTVM, NNoM, so w
 
 TinyMaix is a weekend hackathons project, so it is simple enough to read though in 30 minutes, and it will help TinyML newbies to understand how is it running.   
 
-TinyMaix aims to be a simple TinyML infer library, it abandon many new features and don't use libs like CMSIS-NN.  
+TinyMaix aims to be a simple TinyML infererence library, it abandon many new features and doesn't use libs like CMSIS-NN.  
 
-Follow this design goal, now TinyMaix is as simple as 5 files to compile~   
+Following this design goal, now TinyMaix is as simple as 5 files to compile~   
 
 We hope TinyMaix can help any MCU run AI Neural Network Mdoels, every one can port it to theirself hardware platform~   
 
@@ -76,7 +93,7 @@ We hope TinyMaix can help any MCU run AI Neural Network Mdoels, every one can po
   - they are most common used, efficient structure for MCUs
   - [x] Basic Conv2d, dwConv2d, FC, Relu/Relu6/Softmax, GAP, Reshape
   - [ ] MaxPool, AvgPool (now use stride instead)
-- [x] FP32 model, INT8 quant model
+- [x] FP32 model, INT8 quant model, FP16 model(**NEW**)
 - [x] Convert tmdl from keras h5 or tflite
   - model is simple enough to train with keras/tf
   - tflite have quant functions already
@@ -115,8 +132,25 @@ We hope TinyMaix can help any MCU run AI Neural Network Mdoels, every one can po
 - [ ] other misc OPs
   - TinyMaix support MCUs to run basic model in minimum resource consumption, if you want more OPs, switch to TFlite-micro/TVM/NCNN... 
 
-## Fisrt Try
-Try run mobilenet
+## Try Demos
+### mnist
+MNIST is handwritten digit recognition task, it is simple enough for even 8bit MCU like ATmega328.  
+Try it on PC:  
+```
+cd examples/mnist
+mkdir build
+cd build 
+cmake ..
+make
+./mnist
+```
+
+### mbnet
+mbnet (mobilenet v1) is simple classification model for mobile devices, but it is still a little heavy for MCUs.  
+The model in demo is mobilenet v1 0.25, it input 128x128x3 RGB image, output 1000 classes predict.  
+It need at least 128KB SRAM and 512KB Flash, STM32F411 is the typical minimum config for this model.  
+
+Try run mobilenet  
 ```
 cd examples/mbnet
 mkdir build
@@ -153,7 +187,7 @@ tm_err_t tm_run   (tm_mdl_t* mdl, tm_mat_t* in, tm_mat_t* out);
 ## How to port
 The core file is those 5 files: tm_model.c, tm_layers.c, tinymaix.h, tm_port.h, arch_xxx.h  
 
-If you are using normal mcu without any acceleration instructions, choose arch_O0.h, otherwise choose corresponding architecture header.  
+If you are using normal mcu without any acceleration instructions, choose arch_cpu.h, otherwise choose corresponding architecture header.  
 
 And you should edit tm_port.h to fill your desired configs, all config macro have annotation follow it.   
 
@@ -163,7 +197,7 @@ And now just put them into your project, compile it~
 
 ## How to train/convert models
 There are training scripts in examples/mnist to learn how to train simple mnist models. 
-> Note: you need install TensorFlow2.x first.
+> Note: you need install TensorFlow (>=2.7) first.
 
 After training and save h5 models, you can use scripts in tools to convert to tmdl or c header files.   
 
@@ -224,22 +258,32 @@ Saved to tmdl/mnist_q.tmdl, tmdl/mnist_q.h
 Now you have tmdl or c header files, put it into your project to use it~  
 
 ## How to train models online with MaixHub
-TODO
+
+You can download models from [MaixHub](https://maixhub.com) or train your AI models online easily with MaixHub, don't need AI knowledge, train your model just click your mouse.
+
+* Register [MaixHub](https://maixhub.com) account and login.
+* You can download TinyMaix models from [model zoo](https://maixhub.com/model/zoo) or upload your models to model zoo for sharing.
+* Create a train project, collect dataset and train models online, finally you will get files:
+  * `.tmdl` file and `.h` file, use one of them in your code.
+  * `report.json`, report info, json format, we can find labels or anchors in this file, we will use these params in our code. Attention, these params will change in every training, you should copy these params to your code when change model, or you will the result will be wrong.
+> * There's two type: classification and detection, for first time usage, use **classification is recommended**.
+> * There's many backbone, you should select proper backbone according to your MCU's RAM size, the smaller RAM size, should choose the smaller backbone.
+> * For easier understanding how MaixHub works, at first time you can choose tfjs platform instead of tinymaix to run model on your mobile phone.
+* Find demo in [examples](./examples) folder, use the `maixhub_image_classification` demo or `maixhub_image_detection` demo to run your model.
+
 
 ## How to add new platform acceleration code
+
 TinyMaix use basic dot_product function to accelerate Conv computing.  
-You just need add arch_xxx_yyy.h in src dir, and implement your platform's dot_product function:  
+You just need add arch_xxx_yyy.h in src dir, and implement your platform's dot_product function:
 ```
 TM_INLINE void tm_dot_prod(mtype_t* sptr, mtype_t* kptr,uint32_t size, sumtype_t* result);
 ```
 
-## TODO 
-1. Preprocess with mean/std 
-2. find good backbone for 64KB/128KB/256KB/512KB ram litmit
 ...
 
 ## Contribution & Contacts
-If you want contribute fucntions to TinyMaix, please read "TinyMaix Design" sections, we only want functions in "Features in design" and "Features maybe added".  
+If you want contribute functions to TinyMaix, please read "TinyMaix Design" sections, we only want functions in "Features in design" and "Features maybe added".  
 
 If you want commit your port test result, please commit to benchmark.md.
 You are welcome to port TinyMaix to your chip/boards, it will prove how easy to use TinyMaix run Deeplearning model in MCUs~

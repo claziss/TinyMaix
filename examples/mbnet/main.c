@@ -15,19 +15,40 @@ limitations under the License.
 
 //https://github.com/fchollet/deep-learning-models/releases
 
-#define INCBIN_STYLE INCBIN_STYLE_SNAKE
-#define INCBIN_PREFIX
-#include "incbin.h"
 
-#if TM_MDL_TYPE==TM_MDL_FP32
-//INCBIN(mdl, "../../../tools/tmdl/mbnet128_0.25_f.tmdl");
-#include "../../tools/tmdl/mbnet128_0.25_f.h"
+#define IMG_L 128
+
+#if IMG_L==128
+    #include "pic128.h"
+    #if TM_MDL_TYPE==TM_MDL_FP32
+    #include "../../tools/tmdl/mbnet128_0.25_f.h"
+    #elif TM_MDL_TYPE==TM_MDL_FP16
+    #include "../../tools/tmdl/mbnet128_0.25_fp16.h"
+    #elif TM_MDL_TYPE==TM_MDL_INT8
+    #include "../../tools/tmdl/mbnet128_0.25_q.h"
+    #elif TM_MDL_TYPE==TM_MDL_FP8_143
+    #include "../../tools/tmdl/mbnet128_0.25_fp8_143.h"
+    #elif TM_MDL_TYPE==TM_MDL_FP8_152
+    #include "../../tools/tmdl/mbnet128_0.25_fp8_152.h"
+    #else
+    #error "wrong mdl type!"
+    #endif 
+#elif IMG_L==96
+    #include "pic96.h"
+    #if TM_MDL_TYPE==TM_MDL_FP32
+    #include "../../tools/tmdl/mbnet96_0.25_f.h"
+    #elif TM_MDL_TYPE==TM_MDL_FP16
+    #include "../../tools/tmdl/mbnet96_0.25_fp16.h"
+    #elif TM_MDL_TYPE==TM_MDL_INT8
+    #include "../../tools/tmdl/mbnet96_0.25_q.h"
+    #else
+    #error "wrong mdl type!"
+    #endif 
 #else
-#include "../../tools/tmdl/mbnet128_0.25_q.h"
-#endif 
+    #error "err pic size"
+#endif
 
 extern const char* labels[1000];
-extern const unsigned char pic[];
 
 //generate pic c array
 /*
@@ -95,15 +116,13 @@ static void parse_output(tm_mat_t* outs)
     return;
 }
 
-#define IMG_L 128
-
 int main(int argc, char** argv)
 {   TM_DBGT_INIT();
     TM_PRINTF("mbnet demo\n");
     tm_mdl_t mdl;
 
-    tm_mat_t in_uint8 = {3,IMG_L,IMG_L,3, (mtype_t*)pic};
-    tm_mat_t in = {3,IMG_L,IMG_L,3, NULL};
+    tm_mat_t in_uint8 = {3,IMG_L,IMG_L,3, {(mtype_t*)pic}};
+    tm_mat_t in = {3,IMG_L,IMG_L,3, {NULL}};
     tm_mat_t outs[1];
     tm_err_t res;
     tm_stat((tm_mdlbin_t*)mdl_data); 
@@ -113,8 +132,7 @@ int main(int argc, char** argv)
         TM_PRINTF("tm model load err %d\n", res);
         return -1;
     }
-
-#if TM_MDL_TYPE != TM_MDL_FP32
+#if (TM_MDL_TYPE == TM_MDL_INT8)||(TM_MDL_TYPE == TM_MDL_INT16)
     res = tm_preprocess(&mdl, TMPP_UINT2INT, &in_uint8, &in); 
 #else
     res = tm_preprocess(&mdl, TMPP_UINT2FP01, &in_uint8, &in); 
@@ -127,7 +145,3 @@ int main(int argc, char** argv)
     tm_unload(&mdl);                 
     return 0;
 }
-
-
-
-
